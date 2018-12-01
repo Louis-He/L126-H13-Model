@@ -19,10 +19,10 @@ month = datetime.datetime.now().month
 PI = 3.1415926535857932
 EARTHRADIUS = 6371000.0 # unit: m
 
-center = 0.68 # 1
-cocenter = 0.03  # 4
-subcenter = 0.02  # 8
-subouter = 0.005  # 8
+center = 0.76 # 1
+cocenter = 0.05  # 4
+subcenter = 0.005  # 8
+subouter = 0.000  # 8
 outer = 0  # 4
 
 ######################### INPUT HELPER FUNCTIONS BEGIN ###########################
@@ -117,7 +117,7 @@ def windComponent(pm25Grid, grbs, grbs2):
     # v component of wind
 
     # this hour
-    #wind10m_u = grbs.select(name='10 metre U wind component')[0]
+    # wind10m_u = grbs.select(name='10 metre U wind component')[0]
     wind10m_u = grbs.select(name='U component of wind')[35]
     wind10m_u = np.array(wind10m_u.values)
     # wind10m_v = grbs.select(name='10 metre V wind component')[0]
@@ -152,7 +152,7 @@ def windComponent(pm25Grid, grbs, grbs2):
 
                 # average wind field
                 initialPortion = (k + 1.0) / (ITERATIVE_TIMES + 1.0)
-                nextHourPortion = 1 - initialPortion
+                nextHourPortion = 1.0 - initialPortion
 
                 for m in range(-3, 4):
                     for l in range(-3, 4):
@@ -176,47 +176,63 @@ def windComponent(pm25Grid, grbs, grbs2):
                 horizontalDistance = wind10m_u_process[i][j] * 60.0 * 60 / ITERATIVE_TIMES  # unit: m
                 verticalDistance = wind10m_v_process[i][j] * 60.0 * 60 / ITERATIVE_TIMES  # unit: m
 
-                horizontalGrid = horizontalDistance / (earthCircumfirance / 360.0) * 4.0
-                verticalGrid = verticalDistance / ((2.0 * PI * EARTHRADIUS) / 360.0) * 4.0
+                horizontalGrid = horizontalDistance / ((2.0 * PI * EARTHRADIUS) / 360.0) * 4.0
+                verticalGrid = verticalDistance / (earthCircumfirance / 360.0) * 4.0
 
                 newHorizontalCenter = float(j + horizontalGrid) # lon grid
                 newVerticalCenter = float(i + verticalGrid) # lat grid
 
+
+                # upper
+                upper = newVerticalCenter - 0.5
+
+                # lower
+                lower = newVerticalCenter + 0.5
+
+                # left
+                left = newHorizontalCenter - 0.5
+
+                # right
+                right = newHorizontalCenter + 0.5
+
+                horizontalCentralLine = math.floor(newHorizontalCenter) + 0.5
+                verticalCentralLine = math.floor(newVerticalCenter) + 0.5
+
                 # LEFT UPPER grid
                 if(isInGrid(math.floor(newVerticalCenter), math.floor(newHorizontalCenter))):
 
-                    leftUpperPortion = (newVerticalCenter - math.floor(newVerticalCenter)) * \
-                                       (newHorizontalCenter - math.floor(newHorizontalCenter))
+                    leftUpperPortion = (horizontalCentralLine - left) * (verticalCentralLine - upper)
 
                     forecastWindComponent[math.floor(newVerticalCenter)][math.floor(newHorizontalCenter)] += \
                         tmpForecastWindComponent[i][j] * leftUpperPortion
 
+
                 # LEFT BOTTOM grid
                 if(isInGrid(math.floor(newVerticalCenter) + 1, math.floor(newHorizontalCenter))):
 
-                    leftBottomPortion = ((math.floor(newVerticalCenter) + 1) - newVerticalCenter) * \
-                                       (newHorizontalCenter - math.floor(newHorizontalCenter))
+                    leftBottomPortion = (horizontalCentralLine - left) * (lower - verticalCentralLine)
 
                     forecastWindComponent[math.floor(newVerticalCenter) + 1][math.floor(newHorizontalCenter)] += \
                         tmpForecastWindComponent[i][j] * leftBottomPortion
 
+
                 # RIGHT UPPER grid
                 if (isInGrid(math.floor(newVerticalCenter), math.floor(newHorizontalCenter) + 1)):
 
-                    rightUpperPortion = (newVerticalCenter - math.floor(newVerticalCenter)) * \
-                                        ((math.floor(newHorizontalCenter) + 1) - newHorizontalCenter)
+                    rightUpperPortion = (right - horizontalCentralLine) * (verticalCentralLine - upper)
 
                     forecastWindComponent[math.floor(newVerticalCenter)][math.floor(newHorizontalCenter) + 1] += \
                         tmpForecastWindComponent[i][j] * rightUpperPortion
 
+
                 # RIGHT BOTTOM grid
                 if(isInGrid(math.floor(newVerticalCenter) + 1, math.floor(newHorizontalCenter) + 1)):
 
-                    rightBottomPortion = ((math.floor(newVerticalCenter) + 1) - newVerticalCenter) * \
-                                       ((math.floor(newHorizontalCenter) + 1) - newHorizontalCenter)
+                    rightBottomPortion = (right - horizontalCentralLine) * (lower - verticalCentralLine)
 
                     forecastWindComponent[math.floor(newVerticalCenter) + 1][math.floor(newHorizontalCenter) + 1] += \
                         tmpForecastWindComponent[i][j] * rightBottomPortion
+
 
         tmpForecastWindComponent = forecastWindComponent
                 # STAY PARTICAL
