@@ -19,10 +19,10 @@ month = datetime.datetime.now().month
 PI = 3.1415926535857932
 EARTHRADIUS = 6371000.0 # unit: m
 
-center = 0.28 # 1
-cocenter = 0.06  # 4
-subcenter = 0.04  # 8
-subouter = 0.02  # 8
+center = 0.68 # 1
+cocenter = 0.03  # 4
+subcenter = 0.02  # 8
+subouter = 0.005  # 8
 outer = 0  # 4
 
 ######################### INPUT HELPER FUNCTIONS BEGIN ###########################
@@ -109,85 +109,118 @@ def preProcess(pm25Grid, pm2_5Inventory):
     return pm25Grid
 
 # shape: 161 * 281
-def windComponent(pm25Grid, grbs):
-    forecastWindComponent = np.zeros((161, 281))
+def windComponent(pm25Grid, grbs, grbs2):
+    ITERATIVE_TIMES = 4
+
 
     # U component of wind
     # v component of wind
-    #wind10m_u = grbs.select(name='10 metre U wind component')[0]
-    wind10m_u = grbs.select(name='U component of wind')[34]
-    wind10m_u = np.array(wind10m_u.values)
 
-    #wind10m_v = grbs.select(name='10 metre V wind component')[0]
-    wind10m_v = grbs.select(name='V component of wind')[34]
+    # this hour
+    #wind10m_u = grbs.select(name='10 metre U wind component')[0]
+    wind10m_u = grbs.select(name='U component of wind')[35]
+    wind10m_u = np.array(wind10m_u.values)
+    # wind10m_v = grbs.select(name='10 metre V wind component')[0]
+    wind10m_v = grbs.select(name='V component of wind')[35]
     wind10m_v = np.array(wind10m_v.values)
 
-    windSpeed = (wind10m_u ** 2 + wind10m_v ** 2) ** (1.0 / 2.0)
+    # next hour
+    # wind10m_u2 = grbs2.select(name='10 metre U wind component')[0]
+    wind10m_u2 = grbs2.select(name='U component of wind')[35]
+    wind10m_u2 = np.array(wind10m_u2.values)
+    # wind10m_v2 = grbs2.select(name='10 metre V wind component')[0]
+    wind10m_v2 = grbs2.select(name='V component of wind')[35]
+    wind10m_v2 = np.array(wind10m_v2.values)
+
+    # windSpeed = (wind10m_u ** 2 + wind10m_v ** 2) ** (1.0 / 2.0)
+    # windSpeed2 = (wind10m_u2 ** 2 + wind10m_v2 ** 2) ** (1.0 / 2.0)
 
     # be AWARE OF CONVENTION!!!!!
     wind10m_u_process = np.zeros((161,281))
-    wind10m_V_process = np.zeros((161,281))
+    wind10m_v_process = np.zeros((161,281))
 
-    for i in range(len(wind10m_u)):
-        for j in range(len(wind10m_u[0])):
-            if i > 0 and i < 160 and j > 0 and j < 280:
-                wind10m_u_process[i][j] += 0.15 * wind10m_u[i - 1][j] +  0.4 * wind10m_u[i][j] + 0.15 * wind10m_u[i+1][j] + 0.15 * wind10m_u[i][j-1] + 0.15 * wind10m_u[i][j+1]
-                wind10m_V_process[i][j] += 0.15 * wind10m_v[i - 1][j] +  0.4 * wind10m_v[i][j] + 0.15 * wind10m_v[i+1][j] + 0.15 * wind10m_v[i][j-1] + 0.15 * wind10m_v[i][j+1]
 
-            stayPortion = (6.0 - windSpeed[i][j]) * 0.15
-            if stayPortion < 0.25:
-                stayPortion = 0.25
-            leftPortion = 1.0 - stayPortion
+    # calculate wind
+    tmpForecastWindComponent = pm25Grid
 
-            tmpLatitude = i / 4.0 + 15
-            earthCircumfirance = 2 * PI * math.sin(((90 - tmpLatitude) / 180.0) * PI) * EARTHRADIUS
-            horizontalDistance = wind10m_u[i][j] * 60.0 * 60  # unit: m
-            verticalDistance = wind10m_v[i][j] * 60.0 * 60  # unit: m
+    for k in range(ITERATIVE_TIMES):
 
-            horizontalGrid = horizontalDistance / (earthCircumfirance / 360.0) * 4.0
-            verticalGrid = verticalDistance / ((2.0 * PI * EARTHRADIUS) / 360.0) * 4.0
+        forecastWindComponent = np.zeros((161, 281))
 
-            newHorizontalCenter = float(j + horizontalGrid) # lon grid
-            newVerticalCenter = float(i + verticalGrid) # lat grid
+        for i in range(len(wind10m_u)):
+            for j in range(len(wind10m_u[0])):
 
-            # LEFT UPPER grid
-            if(isInGrid(math.floor(newVerticalCenter), math.floor(newHorizontalCenter))):
+                # average wind field
+                initialPortion = (k + 1.0) / (ITERATIVE_TIMES + 1.0)
+                nextHourPortion = 1 - initialPortion
 
-                leftUpperPortion = (newVerticalCenter - math.floor(newVerticalCenter)) * \
-                                   (newHorizontalCenter - math.floor(newHorizontalCenter))
+                for m in range(-3, 4):
+                    for l in range(-3, 4):
+                        if i >= 3 and i <= 157 and j >= 3 and j <= 277:
+                            if m == -3 or l == -3 or m == 4 or l == 4:
+                                wind10m_u_process[i][j] += (wind10m_u[i + m][j + l] * 0.0304 * initialPortion + wind10m_u2[i + m][j + l] * 0.0304 * nextHourPortion) / 2.0
+                                wind10m_v_process[i][j] += (wind10m_u[i + m][j + l] * 0.0304 * initialPortion + wind10m_v2[i + m][j + l] * 0.0304 * nextHourPortion) / 2.0
+                            else:
+                                wind10m_u_process[i][j] += (wind10m_u[i + m][j + l] * 0.01 * initialPortion + wind10m_u2[i + m][j + l] * 0.01 * nextHourPortion) / 2.0
+                                wind10m_v_process[i][j] += (wind10m_u[i + m][j + l] * 0.01 * initialPortion + wind10m_v2[i + m][j + l] * 0.01 * nextHourPortion) / 2.0
 
-                forecastWindComponent[math.floor(newVerticalCenter)][math.floor(newHorizontalCenter)] += \
-                    pm25Grid[i][j] * leftUpperPortion * leftPortion
+                '''
+                stayPortion = (4.0 - (windSpeed[i][j] + windSpeed2[i][j]) / 2.0 ) * 0.2
+                if stayPortion < 0.3:
+                    stayPortion = 0.3
+                leftPortion = 1.0 - stayPortion
+                '''
 
-            # LEFT BOTTOM grid
-            if(isInGrid(math.floor(newVerticalCenter) + 1, math.floor(newHorizontalCenter))):
+                tmpLatitude = i / 4.0 + 15
+                earthCircumfirance = 2 * PI * math.sin(((90 - tmpLatitude) / 180.0) * PI) * EARTHRADIUS
+                horizontalDistance = wind10m_u_process[i][j] * 60.0 * 60 / ITERATIVE_TIMES  # unit: m
+                verticalDistance = wind10m_v_process[i][j] * 60.0 * 60 / ITERATIVE_TIMES  # unit: m
 
-                leftBottomPortion = ((math.floor(newVerticalCenter) + 1) - newVerticalCenter) * \
-                                   (newHorizontalCenter - math.floor(newHorizontalCenter))
+                horizontalGrid = horizontalDistance / (earthCircumfirance / 360.0) * 4.0
+                verticalGrid = verticalDistance / ((2.0 * PI * EARTHRADIUS) / 360.0) * 4.0
 
-                forecastWindComponent[math.floor(newVerticalCenter) + 1][math.floor(newHorizontalCenter)] += \
-                    pm25Grid[i][j] * leftBottomPortion * leftPortion
+                newHorizontalCenter = float(j + horizontalGrid) # lon grid
+                newVerticalCenter = float(i + verticalGrid) # lat grid
 
-            # RIGHT UPPER grid
-            if (isInGrid(math.floor(newVerticalCenter), math.floor(newHorizontalCenter) + 1)):
+                # LEFT UPPER grid
+                if(isInGrid(math.floor(newVerticalCenter), math.floor(newHorizontalCenter))):
 
-                rightUpperPortion = (newVerticalCenter - math.floor(newVerticalCenter)) * \
-                                    ((math.floor(newHorizontalCenter) + 1) - newHorizontalCenter)
+                    leftUpperPortion = (newVerticalCenter - math.floor(newVerticalCenter)) * \
+                                       (newHorizontalCenter - math.floor(newHorizontalCenter))
 
-                forecastWindComponent[math.floor(newVerticalCenter)][math.floor(newHorizontalCenter) + 1] += \
-                    pm25Grid[i][j] * rightUpperPortion * leftPortion
+                    forecastWindComponent[math.floor(newVerticalCenter)][math.floor(newHorizontalCenter)] += \
+                        tmpForecastWindComponent[i][j] * leftUpperPortion
 
-            # RIGHT BOTTOM grid
-            if(isInGrid(math.floor(newVerticalCenter) + 1, math.floor(newHorizontalCenter) + 1)):
+                # LEFT BOTTOM grid
+                if(isInGrid(math.floor(newVerticalCenter) + 1, math.floor(newHorizontalCenter))):
 
-                rightBottomPortion = ((math.floor(newVerticalCenter) + 1) - newVerticalCenter) * \
-                                   ((math.floor(newHorizontalCenter) + 1) - newHorizontalCenter)
+                    leftBottomPortion = ((math.floor(newVerticalCenter) + 1) - newVerticalCenter) * \
+                                       (newHorizontalCenter - math.floor(newHorizontalCenter))
 
-                forecastWindComponent[math.floor(newVerticalCenter) + 1][math.floor(newHorizontalCenter) + 1] += \
-                    pm25Grid[i][j] * rightBottomPortion * leftPortion
+                    forecastWindComponent[math.floor(newVerticalCenter) + 1][math.floor(newHorizontalCenter)] += \
+                        tmpForecastWindComponent[i][j] * leftBottomPortion
 
-            # STAY PARTICAL
-            forecastWindComponent[i][j] += pm25Grid[i][j] * stayPortion
+                # RIGHT UPPER grid
+                if (isInGrid(math.floor(newVerticalCenter), math.floor(newHorizontalCenter) + 1)):
+
+                    rightUpperPortion = (newVerticalCenter - math.floor(newVerticalCenter)) * \
+                                        ((math.floor(newHorizontalCenter) + 1) - newHorizontalCenter)
+
+                    forecastWindComponent[math.floor(newVerticalCenter)][math.floor(newHorizontalCenter) + 1] += \
+                        tmpForecastWindComponent[i][j] * rightUpperPortion
+
+                # RIGHT BOTTOM grid
+                if(isInGrid(math.floor(newVerticalCenter) + 1, math.floor(newHorizontalCenter) + 1)):
+
+                    rightBottomPortion = ((math.floor(newVerticalCenter) + 1) - newVerticalCenter) * \
+                                       ((math.floor(newHorizontalCenter) + 1) - newHorizontalCenter)
+
+                    forecastWindComponent[math.floor(newVerticalCenter) + 1][math.floor(newHorizontalCenter) + 1] += \
+                        tmpForecastWindComponent[i][j] * rightBottomPortion
+
+        tmpForecastWindComponent = forecastWindComponent
+                # STAY PARTICAL
+                # forecastWindComponent[i][j] += tmpForecastWindComponent[i][j]
 
     newforecastWindComponent = np.zeros((161, 281))
     for i in range(1, len(wind10m_u) - 1):
@@ -690,7 +723,7 @@ def plot(gridArray, windu, windv, title):
     plt.clf()
     plt.close()
 
-def mainOperation(GFSheadHour, hour, gfsHour):
+def mainOperation(GFSheadHour, hour, gfsHour, gfsHourNext):
     ######################### INPUT DATASET BEGIN ###########################
     # 70 ~ 140: 70
     # 15 ~ 55: 15
@@ -700,6 +733,11 @@ def mainOperation(GFSheadHour, hour, gfsHour):
         grbs = pygrib.open('rawfile/' + GFSheadHour + '.f' + gfsHour)
     else:
         grbs = pygrib.open('rawfile/' + GFSheadHour + '.f0' + gfsHour)
+
+    if len(gfsHourNext) == 3:
+        grbs2 = pygrib.open('rawfile/' + GFSheadHour + '.f' + gfsHourNext)
+    else:
+        grbs2 = pygrib.open('rawfile/' + GFSheadHour + '.f0' + gfsHourNext)
 
     # 70 ~ 140: 70
     # 15 ~ 55: 15
@@ -737,7 +775,7 @@ def mainOperation(GFSheadHour, hour, gfsHour):
     if fct == '01':
         pm2_5InitialField = preProcess(pm2_5InitialField, pm2_5Inventory)
     # print('pre-process: ', times.time() - start, ' s')
-    wind = windComponent(pm2_5InitialField, grbs)
+    wind = windComponent(pm2_5InitialField, grbs, grbs2)
     windPart = wind['windComponent']
     # print('wind part: ', times.time() - start, ' s')
     newPollutant = newPollutantFromSource(grbs, pm2_5Inventory)
@@ -813,6 +851,7 @@ offset = determineOffset()
 GFSHead = GFSInitTimeStr()
 for i in range(96):
     gfsHour = i + offset
+    gfsHourNext = gfsHour + 1
     if i < 10:
         i = '0' + str(i)
     else:
@@ -823,5 +862,10 @@ for i in range(96):
     else:
         gfsHour = str(gfsHour)
 
-    mainOperation(GFSHead, i, gfsHour)
+    if gfsHourNext < 10:
+        gfsHourNext = '0' + str(gfsHourNext)
+    else:
+        gfsHourNext = str(gfsHourNext)
+
+    mainOperation(GFSHead, i, gfsHour, gfsHourNext)
 os.system('python3 point_Forecast.py')
