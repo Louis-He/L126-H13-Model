@@ -19,9 +19,9 @@ month = datetime.datetime.now().month
 PI = 3.1415926535857932
 EARTHRADIUS = 6371000.0 # unit: m
 
-center = 0.76 # 1
-cocenter = 0.05  # 4
-subcenter = 0.005  # 8
+center = 0.92 # 1
+cocenter = 0.02  # 4
+subcenter = 0.000  # 8
 subouter = 0.000  # 8
 outer = 0  # 4
 
@@ -99,19 +99,26 @@ def readInitialPM2_5Field(hour):
 ######################### ANALYSIS HELPER FUNCTIONS BEGIN ###########################
 
 # shape: 161 * 281
-def preProcess(pm25Grid, pm2_5Inventory):
+def preProcess(pm25Grid, grbs, pm2_5Inventory):
+    land = grbs.select(name='Land-sea coverage (nearest neighbor) [land=1,sea=0]')[0]
+    land = land.values
     for i in range(161):
         for j in range(281):
             if pm25Grid[i][j] == 0:
                 pm25Grid[i][j] = 5
+
             if pm2_5Inventory[i][j] / 3 > 5 and pm25Grid[i][j] == 5:
                 pm25Grid[i][j] = pm2_5Inventory[i][j] / 3
+            elif(land[i][j] == 1 and pm25Grid[i][j] == 5):
+                pm25Grid[i][j] = 20
+            elif(land[i][j] == 0 and pm25Grid[i][j] == 5):
+                pm25Grid[i][j] = 5
+
     return pm25Grid
 
 # shape: 161 * 281
 def windComponent(pm25Grid, grbs, grbs2):
-    ITERATIVE_TIMES = 4
-
+    ITERATIVE_TIMES = 3
 
     # U component of wind
     # v component of wind
@@ -264,9 +271,9 @@ def newPollutantFromSource(grbs, sourceInventory):
 
             # adjust pollutant source around shanghai
             if(i >= 60 and i <= 66 and j >=  196 and j <= 203):
-                sourceAdd = sourceAdd * 0.5
+                sourceAdd = sourceAdd * 0.3
             if(i >= 40 and i <= 56 and j >= 176 and j <= 198):
-                sourceAdd = sourceAdd * 0.5
+                sourceAdd = sourceAdd * 0.4
 
             if(sourceAdd > 50):
                 sourceAdd = 50
@@ -301,7 +308,7 @@ def natrualPart(grbs, pm25Grid):
 
     for i in range(161):
         for j in range(281):
-            portionDistribution = 1 - (1 - swi[i][j]) / 7.0
+            portionDistribution = 1 - (1 - swi[i][j] * 1.5) / 4.0
 
     for i in range(161):
         for j in range(281):
@@ -621,7 +628,7 @@ def SWIindex(grbs):
             sourceInventoryPortion[i][j] = deltaT_subIndex + PBLH_subIndex \
                                            + vertical_subIndex + humid_subIndex
 
-            sourceInventoryPortion[i][j] = sourceInventoryPortion[i][j] / 12.0
+            sourceInventoryPortion[i][j] = sourceInventoryPortion[i][j] / 10.0
 
             if(sourceInventoryPortion[i][j] < 0.4):
                 sourceInventoryPortion[i][j] = 0.4
@@ -789,7 +796,7 @@ def mainOperation(GFSheadHour, hour, gfsHour, gfsHourNext):
         fct = str(fct)
 
     if fct == '01':
-        pm2_5InitialField = preProcess(pm2_5InitialField, pm2_5Inventory)
+        pm2_5InitialField = preProcess(pm2_5InitialField, grbs, pm2_5Inventory)
     # print('pre-process: ', times.time() - start, ' s')
     wind = windComponent(pm2_5InitialField, grbs, grbs2)
     windPart = wind['windComponent']
