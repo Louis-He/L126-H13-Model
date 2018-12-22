@@ -143,6 +143,8 @@ def mainmethod():
     print('[' + time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(
                 time.time() + utc * 60 * 60)) + ']Download cycle ends.')
     print('TOTAL DOWNLOADING TIME:' + str(finishtime-inittime) + 's')
+    print('[INFO] Start Air Quality Forecasting...')
+    os.system('python3 mainModel.py')
 
 # decide First start time
 def startmain():
@@ -175,7 +177,7 @@ def initialize():
     print('[' + time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time() + utc * 60 * 60)) + ']' + 'Start downloading file...')
 
 initialize()
-mainmethod()
+# mainmethod()
 print('[Please Wait]System First Start: Wait for next closest GFS files download time window...')
 print('Press Ctrl+{0} to exit'.format('Break' if os.name == 'nt' else 'C'))
 while not startmain():
